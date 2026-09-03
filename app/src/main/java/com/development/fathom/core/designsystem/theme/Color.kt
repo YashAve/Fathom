@@ -139,7 +139,7 @@ val FathomDarkColors = FathomColors(
 
 val LocalFathomColors = compositionLocalOf { FathomDarkColors }
 
-object FathomTheme {
+object ForgeColor {
     val colors: FathomColors
         @Composable get() = LocalFathomColors.current
 }
