@@ -1,73 +1,80 @@
 # Handoff note — laptop → desktop
 
-**From:** laptop Claude session · **Date:** 2026-09-14 · **On top of:** `3649989`
+**From:** laptop Claude session · **Date:** 2026-09-14 · **On top of:** `97e7dd4`
 
-Scope this round was commit-and-push only, explicitly **without** a compile or build
-check — Yash's instruction this time. Nothing below has been run through
-`assembleDebug`; treat it as unverified until someone does.
+Same instruction as last round: commit and push, **no** compile or build check. This is
+now the **second consecutive round** with zero build verification — flagging that plainly
+rather than letting it slide by unremarked, since every round before these two kept a
+green `assembleDebug`.
 
-## What landed (`3649989`)
+## What landed (`97e7dd4`)
 
-**`FathomSectionLabel.kt`** goes from doc-spec-only to a rendered `Row`. It was already
-sitting in the working tree, complete, when this session resumed to commit it — not
-written by this or the last laptop session. Recorded here so provenance is clear rather
-than implied.
+**`FathomPaginationDots.kt`** — new file, went from nonexistent to a complete
+implementation between the last commit and this one. Same situation as
+`FathomSectionLabel` last round: found already written in the working tree when this
+session resumed, not authored here.
 
-What it does: label uppercased at the call site (`text.uppercase()`, since `TextStyle`
-has no `text-transform`), count drawn only when non-null at `fgTertiary` 80% alpha,
-hairline as a `.weight(1f).height(1.dp)` `Box` in `borderSubtle`, `accent` swapping the
-label colour to `textAccent`. All matches the doc comment's LAYOUT / LABEL / COUNT /
-RULE sections.
+What it does: three dots in a `Row`, 8.dp gaps, `wrapContentWidth`. Inactive dots are
+flat `fgDisabled` at 8×8.dp. The active dot animates its width 8→30.dp via
+`animateDpAsState` on `FathomMotion.slow` / `FathomMotion.settle`, switches to the same
+teal linear-gradient brush `FathomButton` uses, and carries the current-colour glow
+shadow. `onSelect` null keeps every dot non-interactive; non-null makes each one
+`clickable` with `indication = null`, calling `onSelect(i)`.
 
 ## Not verified this round
 
-Everything — per instruction, no `./gradlew` command was run. In particular:
+Everything, again, per instruction — no `./gradlew` run:
 
-- Whether `FathomSectionLabel.kt` **compiles at all**. It reads as syntactically sound
-  and its imports resolve to real APIs (checked by eye only, not by the compiler), but
-  that is not the same as green `compileDebugKotlin`. Confirm this before building on
-  top of it.
-- Everything already unverified from the last two rounds: no device/emulator run, no
+- Whether `FathomPaginationDots.kt` compiles. Reads as syntactically sound by eye, same
+  caveat as last round's note: that is not the compiler.
+- `FathomSectionLabel.kt` from last round is **still unverified too** — nobody has run
+  a build since `a7306b3`, three rounds back. Two unverified files are now stacked on
+  top of each other.
+- Everything already open from before: no device/emulator run, no
   `testDebugUnitTest`, no release variant.
 
 ## Found, not fixed
 
-Read while preparing the commit, left alone since this round's scope was commit/push,
-not review:
-
-- **The spec's no-rule-with-action branch isn't implemented.** The doc comment says:
-  "When there is no hairline but there IS an action, the action pushes to the far right
-  instead (`Spacer` with `weight(1f)` before it)." The code has no such branch —
-  `rule = false` with a non-null `action` leaves the action sitting immediately after
-  the label/count instead of pushed right.
-- **`accent` defaults to `true`.** Per the spec, accent is the special case ("onboarding
-  eyebrows" like `"STEP ONE"`), not the general one — every plain call site is accented
-  unless the caller opts out. Same shape of issue as `FathomButton`'s old
-  `enabled = false` default that `a7306b3` fixed.
-- **Unused import**: `androidx.compose.foundation.layout.windowInsetsEndWidth` is
-  imported and never referenced.
-- **No trailing newline** at end of file (also true of the file before this round).
+- **Modifier reuse bug, inside the loop.** Each dot's `Box` is built with
+  `modifier.width(width)...` — the composable's own `modifier` **parameter**, reused
+  inside `repeat(count) { }` — rather than a fresh `Modifier.width(width)...`. The outer
+  `Row` already consumes `modifier` correctly
+  (`Row(modifier = modifier.wrapContentWidth(), ...)`); reusing it again per-dot means
+  any modifier a caller passes (padding, a test tag, anything) lands on the `Row` *and*
+  gets reapplied to every individual dot. Silent at the default (`Modifier`, a no-op),
+  live the moment a caller passes anything real.
+- **The colour cross-fade from the spec isn't implemented.** The doc comment is explicit:
+  "the simplest honest approach is to animate the ALPHA of the gradient layer over the
+  flat one rather than trying to interpolate a Color into a Brush," over the same 420ms
+  on `FathomMotion.morph`. The code has no alpha animation — `isActive` picks gradient or
+  flat background through a hard `if` inside `.then(...)`, so the swap is instant, not
+  the cross-fade the spec describes as the point of that section.
+- No trailing newline at EOF (same as `FathomSectionLabel.kt`).
 
 ## Carried over from before this session
 
-Unchanged from `a017577`, still open, not touched this round:
+Unchanged, none touched this round:
 
-- **`FathomFonts` points at the wrong font provider** —
-  `providerAuthority = "com.google.play.gms.fonts"` / `providerPackage = "com.google.play.gms"`,
-  should be `com.google.android.gms.fonts` / `com.google.android.gms` per this project's
-  own `font_certs.xml`. Still the one I'd fix first, and `FathomSectionLabel` renders
-  text too now, one more place a silent font-resolution failure will show up.
-- **`FathomShapes` still orphaned** — `FathomTheme(...)` passes only `typography` to
-  `MaterialTheme`.
+- **`FathomSectionLabel`'s no-rule-with-action branch is still unimplemented** — no
+  `Spacer(weight(1f))` push-right when `rule = false` and `action` is non-null.
+- **`FathomSectionLabel`'s `accent` still defaults to `true`** — same placeholder-default
+  shape as `FathomButton`'s old `enabled = false`.
+- **`FathomFonts` still points at the wrong font provider** —
+  `com.google.play.gms.fonts` / `com.google.play.gms`, should be
+  `com.google.android.gms.fonts` / `com.google.android.gms`. Still the one I'd fix
+  first — now three components deep render text or colour through this theme with the
+  font path never having been exercised even once.
+- **`FathomShapes` still orphaned.**
 - **`LocalFathomColors` still uses `compositionLocalOf`**, not `staticCompositionLocalOf`.
-- **`@Preview` still sits directly on the shipping composables** (`FathomButton`,
-  `FathomSectionLabel`, `FathomNavHost`) rather than on separate preview wrappers.
+- **`@Preview` still sits directly on the shipping composables**
+  (`FathomButton`, `FathomSectionLabel`, `FathomPaginationDots`, `FathomNavHost`).
 
 ## Suggested next step
 
-Run `./gradlew :app:assembleDebug` before anything else lands — this round shipped code
-with zero build verification, which breaks the pattern every prior round kept. If it's
-clean, the font-provider fix is still the highest-value next change.
+Run `./gradlew :app:assembleDebug` before writing anything else — two rounds of
+uncompiled commits is the point to stop stacking a third on top of. If it's green, the
+modifier-reuse bug above is a small, self-contained fix worth doing before the font
+provider strings, since it's a real correctness bug rather than a cosmetic one.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_018ctkZ7BujomG2ctZonwC5M
