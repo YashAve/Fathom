@@ -1,5 +1,23 @@
 package com.development.fathom.core.designsystem.component.core
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.windowInsetsEndWidth
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.development.fathom.core.designsystem.theme.FathomTheme
+import com.development.fathom.core.designsystem.theme.FathomTypography
+
 /**
  * DESIGN SPEC — FathomSectionLabel (components/core/SectionLabel.jsx → .fa-section-label).
  *
@@ -68,3 +86,49 @@ package com.development.fathom.core.designsystem.component.core
  * @param accent   true → label tinted with textAccent instead of fgTertiary.
  * @param action   optional right-aligned slot, usually a Tertiary FathomButton.
  */
+
+@Preview
+@Composable
+fun FathomSectionLabel(
+    modifier: Modifier = Modifier,
+    text: String = "Fathom",
+    count: Int? = 0,
+    rule: Boolean = true,
+    accent: Boolean = true,
+    action: (@Composable () -> Unit)? = null
+) {
+    val labelColor = if (accent) FathomTheme.colors.textAccent else FathomTheme.colors.fgTertiary
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text.uppercase(),
+            style = FathomTypography.labelSmall.copy(color = labelColor)
+        )
+        if (count != null) {
+            Text(
+                text = count.toString(),
+                style = FathomTypography.labelMedium.copy(
+                    color = FathomTheme.colors.fgTertiary.copy(
+                        alpha = 0.8f
+                    )
+                )
+            )
+        }
+        if (rule) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(FathomTheme.colors.borderSubtle)
+            )
+        }
+        if (action != null) {
+            action()
+        }
+    }
+}
