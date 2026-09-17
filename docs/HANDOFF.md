@@ -1,81 +1,65 @@
 # Handoff note — desktop → laptop
 
-**From:** desktop Claude session · **Date:** 2026-09-15 · **On top of:** `6c7f2b2`
+**From:** desktop Claude session · **Date:** 2026-09-17 · **On top of:** `b57449d`
 
-Two things landed this round: the build verification the last three notes kept asking
-for, and one new component found waiting in the working tree — not authored in this
-conversation, just committed and read closely enough to describe accurately, same as
-your last three rounds.
+Follow-up to the `6c7f2b2` note two days ago: `FathomToggle.kt` had picked up its missing
+interaction wiring and icon rendering in the working tree — not authored in this
+conversation, just verified and committed, same pattern as every round so far.
 
-## What landed (`6c7f2b2`)
+## What landed (`b57449d`)
 
-**`FathomToggle.kt`** — new file. The 54×32dp switch: track (border+`bgSunken` off, teal
-gradient+glow on, flat `bgSunken` disabled) with a knob positioned by `BiasAlignment` so
-travel distance recomputes for free when the knob stretches 26.dp → 30.dp on press —
-same idiom as the doc comment's own explanation of why `BiasAlignment` beats a fixed
-offset.
+**`FathomToggle.kt`** — the two functional gaps from the last note are closed:
 
-## Verified
+- **`.clickable` now applied to the track**, with `.padding(3.dp)` moved to *after* it in
+  the modifier chain rather than before. The reordering is load-bearing: `clickable`
+  fixes its tap-target bounds at the pre-padding 54×32 size, matching the doc spec ("the
+  whole 54×32 area is the tap target"); padding placed after it only shrinks the content
+  area available to the knob for its travel, which is what the 3.dp inset was for. The
+  toggle can now actually be tapped and fire `onChange`.
+- **Icon slot renders for real** — `Icon(currentIcon, ..., tint = knobContentColor)`
+  replaces the empty `Box`. `iconOn` now defaults to `Icons.Default.WbSunny`
+  (`material-icons-extended`, already a project dependency).
+- `knobContentColor`'s disabled branch changed from `bgPress` to `fgDisabled`.
 
-```
-./gradlew :app:assembleDebug --rerun-tasks --no-build-cache
-BUILD SUCCESSFUL in 19s
-42 actionable tasks: 42 executed
-app/build/outputs/apk/debug/app-debug.apk   (24 MB)
-```
+Verified with a full clean `:app:assembleDebug --rerun-tasks --no-build-cache` —
+`BUILD SUCCESSFUL in 20s`, 42/42 tasks executed, APK produced (24 MB). No warnings beyond
+the pre-existing SDK XML-version notice.
 
-Run before `FathomToggle.kt` landed, so it covers `FathomSectionLabel` (`3649989`),
-`FathomPaginationDots` (`97e7dda`) and `FathomChip` (`419a7de`) compiling clean together —
-answers the repeated flag from the three notes before this one. Zero Kotlin compiler
-warnings, including on the ambiguous-`Icon`-import question raised last note: the
-fully-qualified `androidx.compose.material3.Icon(...)` call in `FathomChip` produces no
-warning either way, so that one stays a style finding, not a correctness one. Only warning
-anywhere in the log is the pre-existing, unrelated SDK XML-version notice this project has
-printed since round one.
+## Found, not fixed — new this round
 
-Also ran `:app:testDebugUnitTest` — `BUILD SUCCESSFUL`. Still the untouched
-`ExampleUnitTest` scaffolding, so this confirms the test task itself works, not new
-coverage.
+- **Knob background/shadow still don't respond to `enabled`.** The doc spec says
+  `DISABLED: knob background becomes bgPress, no shadow`; the code unconditionally does
+  `.shadow(FathomElevation.card, ...)` then `.background(bgRaised)` regardless of
+  `enabled`. Present before this round's edit too — just not caught in the last note.
+- **Default `iconOn` contradicts the doc's own example.** `iconOn = Icons.Default.WbSunny`
+  puts the sun on the *checked* state, but the doc comment two lines above it says
+  "On the theme switch: moon when on, sun when off" — i.e. checked should show a moon.
+  Likely just a placeholder default for the `@Preview`, not a real call site, but it
+  reads as backwards against the component's own spec.
 
-**Not re-run after `FathomToggle.kt` landed** — that file is new since the verification
-above, not yet built. Worth a build check before or alongside whatever touches it next.
+## Resolved (drop from future carry-over)
+
+- ~~`.clickable` never applied to the track~~ — fixed, see above.
+- ~~Icon slot is an empty `Box`~~ — fixed, see above.
+
+Note: **`checked` still defaults to `true`** (the wrong-default pattern, now at four
+components) — untouched by this round's edit, still open.
 
 ## Not verified this round
 
-- No device/emulator run — same gap as every round so far.
-- Release variant — still only ever `assembleDebug`.
-- `FathomToggle.kt` itself, per the note above.
-
-## Found, not fixed
-
-**In `FathomToggle.kt`, new this round:**
-
-- **Icon slot is an empty `Box`.** `iconOn`/`iconOff` are accepted parameters but nothing
-  renders them — no `Icon(...)` call inside the knob's inner `Box`.
-- **`.clickable` is never applied to the track.** `interactionSource` and `isPressed`
-  are collected via `collectIsPressedAsState()`, but no modifier in the chain feeds press
-  events into that source — so `onChange` never fires and the press-stretch animation
-  (26.dp → 30.dp) has no way to trigger. This is a step further from working than the
-  other WIP components: those render but may behave oddly; this one can't respond to a
-  tap at all yet.
-- **`checked` defaults to `true`** — a fourth occurrence of the wrong-default pattern,
-  joining `FathomChip.selected`, `FathomSectionLabel.accent`, and the already-fixed
-  `FathomButton.enabled` case below. Four for four now; still reads like a shared
-  template or habit rather than four unrelated slips.
-
-**Unchanged from `e7af684`:**
-
-- **`FathomChip`'s icon slot doesn't match its own spec** — doc says
-  `@Composable () -> Unit`, actual signature is `icon: ImageVector? = null`.
-- **Two unused imports in `FathomChip`** — `android.graphics.drawable.Icon` and
-  `androidx.compose.ui.draw.dropShadow` — the former likely why the `Icon(...)` call is
-  fully-qualified instead of a clean unqualified import.
-- No trailing newline at EOF on the last four new files.
+- No device/emulator run, no release variant — unchanged gaps, every round so far.
 
 ## Carried over from before this session
 
 Unchanged, none touched this round:
 
+- **`FathomChip`'s icon slot doesn't match its own spec** — doc says
+  `@Composable () -> Unit`, actual signature is `icon: ImageVector? = null`.
+- **Two unused imports in `FathomChip`** — `android.graphics.drawable.Icon` and
+  `androidx.compose.ui.draw.dropShadow`.
+- **Wrong-default pattern, four occurrences now** — `FathomToggle.checked`,
+  `FathomChip.selected`, `FathomSectionLabel.accent`, all defaulting to the
+  override/special state rather than the plain one.
 - **`FathomPaginationDots`'s modifier-reuse bug** — each dot's `Box` builds from the
   composable's own `modifier` parameter inside the `repeat` loop instead of a fresh
   `Modifier`.
@@ -91,14 +75,14 @@ Unchanged, none touched this round:
 - **`@Preview` still sits directly on the shipping composables**
   (`FathomButton`, `FathomSectionLabel`, `FathomPaginationDots`, `FathomChip`,
   `FathomToggle`, `FathomNavHost`).
+- No trailing newline at EOF on the last four new files.
 
 ## Suggested next step
 
-`FathomToggle`'s missing `.clickable` is the one item on this list that isn't a polish
-issue — everything else renders and can be exercised once put on a screen; this one
-can't be interacted with at all yet, so it's worth closing before the component goes
-further. The wrong-default pattern (now four occurrences) and the font provider strings
-remain the cheapest, oldest open items otherwise.
+Build is green and current, so no standing build-check debt this time. The wrong-default
+pattern (four for four now) is the single cheapest fix that touches the most files at
+once; the disabled-state gaps in `FathomToggle` and `FathomChip` are the next tier after
+that.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01TbnXJC297hkg8tpvJFE7RR
