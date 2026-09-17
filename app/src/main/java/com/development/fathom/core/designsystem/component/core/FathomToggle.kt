@@ -5,13 +5,18 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -156,7 +161,7 @@ fun FathomToggle(
     checked: Boolean = true,
     onChange: (Boolean) -> Unit = { },
     enabled: Boolean = true,
-    iconOn: ImageVector? = null,
+    iconOn: ImageVector? = Icons.Default.WbSunny,
     iconOff: ImageVector? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -168,7 +173,7 @@ fun FathomToggle(
     val knobContentColor = when {
         !checked && enabled -> FathomTheme.colors.fgTertiary
         checked && enabled -> FathomTheme.colors.currentDeep
-        else -> FathomTheme.colors.bgPress
+        else -> FathomTheme.colors.fgDisabled
     }
 
     val bias by animateFloatAsState(
@@ -185,7 +190,6 @@ fun FathomToggle(
         modifier = Modifier
             .width(54.dp)
             .height(32.dp)
-            .padding(3.dp)
             .then(
                 when {
                     !checked && enabled -> Modifier
@@ -231,6 +235,17 @@ fun FathomToggle(
 
                     else -> Modifier.background(FathomTheme.colors.bgSunken)
                 })
+            .then(
+                if (enabled) {
+                    Modifier.clickable(
+                        indication = null,
+                        interactionSource = interactionSource,
+                        enabled = true,
+                        onClick = { onChange(!checked) }
+                    )
+                } else Modifier
+            )
+            .padding(3.dp)
     ) {
         Box(
             Modifier
@@ -245,13 +260,10 @@ fun FathomToggle(
                 .align(BiasAlignment(horizontalBias = bias, verticalBias = 0f)),
             contentAlignment = Alignment.Center
         ) {
-            /** ═══════════════════════════════════════════════════════════════════════════
-             * THE ICON  (optional)
-             * ═══════════════════════════════════════════════════════════════════════════
-             * - 14.dp, stroke width 2 — smaller than the chip's 16.dp.
-             * - iconOn shows when checked, iconOff when not. Either may be null.
-             * - Tinted with the knob content colour above.
-             * - On the theme switch: moon when on, sun when off.*/
+            val currentIcon = if (checked) iconOn else iconOff
+            if (currentIcon != null) {
+                Icon(currentIcon, null, Modifier.size(14.dp), tint = knobContentColor)
+            }
         }
     }
 }
