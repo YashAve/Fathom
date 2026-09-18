@@ -1,10 +1,12 @@
 package com.development.fathom.core.designsystem.component.core
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -31,18 +33,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import com.development.fathom.core.designsystem.theme.FathomElevation
 import com.development.fathom.core.designsystem.theme.FathomMotion
 import com.development.fathom.core.designsystem.theme.FathomRadius
 import com.development.fathom.core.designsystem.theme.FathomTheme
@@ -51,18 +58,18 @@ import com.development.fathom.core.designsystem.theme.FathomTypography
 /**
  * The fully-rounded 56dp field used by every auth screen and the search bar.
  *
- * @param value        current text. Stateless — the caller owns it.
+ * @param value         current text. Stateless — the caller owns it.
  * @param onValueChange called with the next text.
- * @param modifier     applied to the Column.
- * @param label        optional mono eyebrow. Uppercased inside this composable.
- * @param placeholder  shown when value is empty.
- * @param icon         optional leading 20.dp glyph.
- * @param trailing     optional trailing slot. Ignored when isPassword is true.
- * @param hint         helper text below. Replaced by error when error is non-null.
- * @param error        non-null → coral ring, coral hint, and this string as the message.
- * @param enabled      false → disabled treatment, clicks and input ignored.
- * @param isPassword   true → masks input and adds the reveal eye.
- * @param strength     0f..1f → draws the strength bar. Null → no bar.
+ * @param modifier      applied to the Column.
+ * @param label         optional mono eyebrow. Uppercased inside this composable.
+ * @param placeholder   shown when value is empty.
+ * @param icon          optional leading 20.dp glyph.
+ * @param trailing      optional trailing slot. Ignored when isPassword is true.
+ * @param hint          helper text below. Replaced by error when error is non-null.
+ * @param error         non-null → coral ring, coral hint, and this string as the message.
+ * @param enabled       false → disabled treatment, input ignored.
+ * @param isPassword    true → masks input and adds the reveal eye.
+ * @param strength      0f..1f → draws the strength bar. Null → no bar.
  */
 @Preview
 @Composable
@@ -89,29 +96,91 @@ fun FathomTextField(
     val current = FathomTheme.colors.current
     val currentDeep = FathomTheme.colors.currentDeep
 
-    val animatedStrength = strength?.coerceIn(0f, 1f)?.let {
-        animateFloatAsState(
-            targetValue = it,
-            animationSpec = tween(FathomMotion.slow, easing = FathomMotion.glide)
-        )
-    }
+    val shape = RoundedCornerShape(FathomRadius.field)
 
-    val animateBorder by animateColorAsState(
+    // ── Strength ─────────────────────────────────────────────────────────────
+    // Called unconditionally. A composable inside a null-check would lose its
+    // animation slot whenever `strength` flipped between null and non-null.
+    val animatedStrength by animateFloatAsState(
+        targetValue = (strength ?: 0f).coerceIn(0f, 1f),
+        animationSpec = tween(FathomMotion.slow, easing = FathomMotion.glide),
+        label = "strength"
+    )
+
+    // ── Border ───────────────────────────────────────────────────────────────
+    val borderColor by animateColorAsState(
         targetValue = when {
-            (!isFocused && value.isEmpty() && error != null && enabled) || (value.isNotEmpty() && !isFocused) ->
-                FathomTheme.colors.borderDefault
-
+            !enabled -> Color.Transparent
             error != null -> FathomTheme.colors.warm
             isFocused -> FathomTheme.colors.current
-            else -> Color.Transparent
+            else -> FathomTheme.colors.borderDefault
         },
-        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide)
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "borderColor"
     )
 
-    val animateAccentColor by animateColorAsState(
-        targetValue = if (isFocused) FathomTheme.colors.textAccent else FathomTheme.colors.fgTertiary,
-        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide)
+    val borderWidth by animateDpAsState(
+        targetValue = when {
+            !enabled -> 0.dp
+            isFocused || error != null -> 1.5.dp
+            else -> 1.dp
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "borderWidth"
     )
+
+    // ── Halo ─────────────────────────────────────────────────────────────────
+    val haloColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> Color.Transparent
+            error != null -> FathomTheme.colors.warm.copy(alpha = 0.16f)
+            isFocused -> FathomTheme.colors.focusRing
+            else -> Color.Transparent
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "halo"
+    )
+
+    // ── Shadow ───────────────────────────────────────────────────────────────
+    val shadowElevation by animateDpAsState(
+        targetValue = when {
+            !enabled -> 0.dp
+            isFocused -> FathomElevation.float
+            else -> FathomElevation.card
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "shadow"
+    )
+
+    // ── Surfaces and content ─────────────────────────────────────────────────
+    val backgroundColor by animateColorAsState(
+        targetValue = if (enabled) FathomTheme.colors.bgRaised else FathomTheme.colors.bgSunken,
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "background"
+    )
+
+    val iconTint by animateColorAsState(
+        targetValue = when {
+            !enabled -> FathomTheme.colors.fgDisabled
+            error != null -> FathomTheme.colors.warm
+            isFocused -> FathomTheme.colors.textAccent
+            else -> FathomTheme.colors.fgTertiary
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "iconTint"
+    )
+
+    val labelColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> FathomTheme.colors.fgDisabled
+            isFocused -> FathomTheme.colors.textAccent
+            else -> FathomTheme.colors.fgTertiary
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide),
+        label = "labelColor"
+    )
+
+    val textColor = if (enabled) FathomTheme.colors.fgPrimary else FathomTheme.colors.fgDisabled
 
     Column(
         modifier = modifier,
@@ -121,139 +190,123 @@ fun FathomTextField(
         if (label != null) {
             Text(
                 text = label.uppercase(),
-                style = FathomTypography.labelSmall.copy(color = animateAccentColor),
+                style = FathomTypography.labelSmall.copy(color = labelColor),
                 modifier = Modifier.padding(start = 20.dp)
             )
         }
 
-        /* TODO — HALO
-         * Wrap the Box below in an outer Box that ALWAYS reserves 4.dp padding.
-         * Put the halo as a Modifier.border on that outer Box:
-         *   focused     → FathomTheme.colors.focusRing
-         *   error       → FathomTheme.colors.warm.copy(alpha = 0.16f)
-         *   otherwise   → Color.Transparent
-         * The 4.dp never changes, so the layout never jumps. Only the colour animates,
-         * with tween(FathomMotion.base, FathomMotion.glide).
-         */
-
-        /* TODO — SHADOW
-         * rest / filled → Modifier.shadow(FathomElevation.card, pill shape)
-         * focused       → Modifier.shadow(FathomElevation.float, pill shape)
-         * disabled      → no shadow
-         * Must sit BEFORE clip in the modifier chain.
-         */
-
-        /* TODO — DISABLED
-         * background → FathomTheme.colors.bgSunken (instead of bgRaised)
-         * no border, no shadow
-         * input and icon tint → FathomTheme.colors.fgDisabled
-         * BasicTextField needs enabled = false so it can't take focus.
-         */
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .clip(RoundedCornerShape(FathomRadius.field))
-                .background(FathomTheme.colors.bgRaised)
-                .then(
-                    when {
-                        (!isFocused && value.isEmpty() && error != null && enabled) || (value.isNotEmpty() && !isFocused) -> Modifier.border(
-                            1.dp,
-                            animateBorder,
-                            RoundedCornerShape(FathomRadius.button)
+                // The halo sits OUTSIDE the pill. inset(-4.dp) expands the drawing
+                // area past the bounds; the opaque background below covers the middle,
+                // leaving only the 4.dp rim visible. Must come BEFORE clip.
+                .drawBehind {
+                    inset(-4.dp.toPx()) {
+                        drawRoundRect(
+                            color = haloColor,
+                            cornerRadius = CornerRadius(size.height / 2f)
                         )
-
-                        error != null -> Modifier.border(
-                            (1.5).dp, animateBorder,
-                            RoundedCornerShape(FathomRadius.button)
-                        )
-
-                        isFocused -> Modifier.border(
-                            (1.5).dp, animateBorder,
-                            RoundedCornerShape(FathomRadius.button)
-                        )
-
-                        else -> Modifier
                     }
-                )
+                }
+                .shadow(elevation = shadowElevation, shape = shape)
+                .clip(shape)
+                .background(backgroundColor)
+                .border(borderWidth, borderColor, shape)
                 .padding(horizontal = 20.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (icon != null) {
                     Icon(
                         imageVector = icon,
-                        null,
+                        contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = animateAccentColor
+                        tint = iconTint
                     )
                 }
+
                 BasicTextField(
                     value = value,
-                    onValueChange = { onValueChange(it) },
+                    onValueChange = onValueChange,
+                    enabled = enabled,
                     textStyle = FathomTypography.bodyLarge.copy(
-                        lineHeight = (1.4).em,
-                        color = FathomTheme.colors.fgPrimary
+                        lineHeight = 1.4.em,
+                        color = textColor
                     ),
                     singleLine = true,
                     interactionSource = interactionSource,
-                    visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
+                    cursorBrush = SolidColor(FathomTheme.colors.current),
+                    visualTransformation =
+                        if (isPassword && !revealed) PasswordVisualTransformation()
+                        else VisualTransformation.None,
                     modifier = Modifier.weight(1f)
-                ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = FathomTypography.bodyLarge.copy(
-                                lineHeight = (1.4).em,
-                                color = FathomTheme.colors.fgTertiary
+                ) { innerTextField ->
+                    // This trailing lambda is the decorationBox. innerTextField() IS
+                    // the editable text — omit the call and the field renders nothing.
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = FathomTypography.bodyLarge.copy(
+                                    lineHeight = 1.4.em,
+                                    color = FathomTheme.colors.fgTertiary
+                                )
                             )
-                        )
+                        }
+                        innerTextField()
                     }
                 }
-                if (isPassword) {
-                    Icon(
-                        imageVector = if (revealed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        null,
-                        modifier = Modifier.size(20.dp),
-                        tint = animateAccentColor
+
+                when {
+                    isPassword -> Icon(
+                        imageVector = if (revealed) Icons.Default.Visibility
+                        else Icons.Default.VisibilityOff,
+                        contentDescription = if (revealed) "Hide password" else "Show password",
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable(enabled = enabled) { revealed = !revealed },
+                        tint = iconTint
                     )
-                }
-                if (trailing != null) {
-                    Icon(
+
+                    trailing != null -> Icon(
                         imageVector = trailing,
-                        null,
+                        contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = animateAccentColor
+                        tint = iconTint
                     )
                 }
             }
         }
 
-        if (strength != null && animatedStrength != null) {
+        if (strength != null) {
             Box(
                 modifier = Modifier
+                    // Padding first. After background it would inset the gradient
+                    // while leaving the grey track at full width.
+                    .padding(horizontal = 20.dp)
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(FathomRadius.button))
                     .background(FathomTheme.colors.bgSunken)
-                    .padding(horizontal = 20.dp)
                     .drawWithCache {
                         val brush = Brush.linearGradient(
-                            Pair(0f, currentLight),
-                            Pair(0.52f, current),
-                            Pair(1f, currentDeep),
+                            0f to currentLight,
+                            0.52f to current,
+                            1f to currentDeep,
+                            start = Offset.Zero,
                             end = Offset(size.width, size.height)
                         )
                         onDrawWithContent {
                             drawContent()
                             drawRoundRect(
-                                brush,
-                                size = Size(size.width * animatedStrength.value, size.height),
-                                cornerRadius = CornerRadius(FathomRadius.button.toPx())
+                                brush = brush,
+                                size = Size(size.width * animatedStrength, size.height),
+                                cornerRadius = CornerRadius(size.height / 2f)
                             )
                         }
                     }
@@ -263,7 +316,10 @@ fun FathomTextField(
         if (hint != null || error != null) {
             Text(
                 text = error ?: hint!!,
-                style = FathomTypography.bodySmall.copy(if (hint != null) FathomTheme.colors.fgTertiary else FathomTheme.colors.warm),
+                style = FathomTypography.bodySmall.copy(
+                    color = if (error != null) FathomTheme.colors.warm
+                    else FathomTheme.colors.fgTertiary
+                ),
                 modifier = Modifier.padding(start = 20.dp)
             )
         }
