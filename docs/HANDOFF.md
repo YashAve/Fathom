@@ -22,6 +22,33 @@ Verified with a full clean `:app:assembleDebug --rerun-tasks --no-build-cache` �
 `BUILD SUCCESSFUL in 21s`, 42/42 tasks executed. No warnings beyond the pre-existing SDK
 XML-version notice. None of the findings below are compile errors.
 
+## Security finding — from an automated post-commit review, not found by reading
+
+A background security review of the `ef12720` commit flagged **2 issues**; only the
+first came through with a name, the second only as "+1 more" with no detail and no
+retrievable task/transcript to pull it from. Not guessing at what the second one is —
+flagging that it exists and is unverified, rather than inventing a description.
+
+- **`sensitive-data-leak-to-ime`, confirmed by direct inspection.** `BasicTextField` here
+  is called with no `KeyboardOptions` at all (`grep -n "KeyboardOptions\|KeyboardType"`
+  on the file returns nothing), so it runs on `KeyboardOptions.Default` —
+  `keyboardType = KeyboardType.Text`. That means even when `isPassword = true`, the IME
+  is never told this is a sensitive field. Visual masking via `PasswordVisualTransformation`
+  (already broken — see the always-on-regardless-of-`isPassword` finding below) only
+  stops shoulder-surfing; without `KeyboardType.Password`, IMEs remain free to learn,
+  autocorrect, and — on cloud-connected keyboards — sync the actual keystrokes. There's
+  also no autofill `contentType`/semantics hint anywhere, so autofill services don't know
+  to treat this as a password field either. Compounds directly with the masking and
+  reveal-eye bugs below: right now there is no layer, visual or IME-level, that reliably
+  treats password input as sensitive.
+- **Second finding: unretrieved.** The task notification named only
+  `sensitive-data-leak-to-ime` explicitly and appended "+1 more" with nothing else —
+  no `task_id` surfaced, no spawned agent to query for the full report. Whoever picks
+  this up next may have access to the same review tooling and get the complete list;
+  this note only carries the one confirmed item.
+
+Not fixed here, per standing instruction — documented only.
+
 ## Found, not fixed — new this round, undisclosed by the file's own TODOs
 
 - **`decorationBox` never calls `innerTextField`.** `BasicTextField`'s trailing lambda
@@ -85,11 +112,16 @@ No device/emulator run, no release variant — unchanged gaps, every round so fa
 
 ## Suggested next step
 
-The `decorationBox` bug in `FathomTextField` is the one item across every note so far
-that makes a component look broken rather than merely unfinished — worth fixing before
-anything else, since any screen built against this field right now would appear to eat
-user input silently. After that, the two cross-cutting patterns (five wrong defaults,
-four missing disabled states) remain the highest-leverage single passes.
+The `sensitive-data-leak-to-ime` finding outranks everything else on this list — it's the
+only item so far in the security category rather than correctness or polish, and it's
+about data leaving the device rather than a screen just looking wrong. Add
+`keyboardOptions = KeyboardOptions(keyboardType = if (isPassword) KeyboardType.Password
+else KeyboardType.Text)` (and get the missing second finding from a fresh review, since
+this note couldn't retrieve it) before anything else touches this file. Right after that,
+the `decorationBox` bug is still the one item that makes the component look broken rather
+than merely unfinished — any screen built against this field right now would appear to
+eat user input silently. The two cross-cutting patterns (five wrong defaults, four missing
+disabled states) remain the highest-leverage passes after both of those.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01TbnXJC297hkg8tpvJFE7RR
