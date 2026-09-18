@@ -1,52 +1,63 @@
 # Handoff note — desktop → laptop
 
-**From:** desktop Claude session · **Date:** 2026-09-17 · **On top of:** `7d54b9a`
+**From:** desktop Claude session · **Date:** 2026-09-18 · **On top of:** `ef12720`
 
-Same-day follow-up to the `b57449d` note: `FathomIconButton.kt` was found complete in the
-working tree — not authored in this conversation, verified and committed, same pattern as
-every round so far.
+Same-day-as-usual follow-up to the `7d54b9a` note: `FathomTextField.kt` was found complete
+in the working tree — not authored in this conversation, verified and committed, same
+pattern as every round so far. This one's worth reading closely before picking up: it has
+a correctness bug more severe than anything found in prior rounds.
 
-## What landed (`7d54b9a`)
+## What landed (`ef12720`)
 
-**`FathomIconButton.kt`** — new file. Round icon target for chrome and transport controls,
-four variants (Plain transparent, Tonal `currentWash`, Filled teal gradient + glow, Raised
-`bgRaised` + card shadow), an `active` toggle independent of variant, press scale 0.9 +
-`bgPress` background flash.
+**`FathomTextField.kt`** — new file. The 56dp rounded field for auth screens and search:
+label eyebrow, leading icon, animated focus/error border, optional strength bar (gradient
+fill via `drawWithCache`, clipped to `strength * width`), hint/error text below.
 
-Worth noting since it's easy to get wrong and wasn't: the doc comment explicitly calls out
-a Filled+active edge case ("`--on` technically overrides Filled's `currentOn` with
-`textAccent` in the CSS... treat Filled + active as leave the content colour alone") and
-the code gets it right — `contentColor`'s condition is
-`active && variant != FathomIconButtonVariant.Filled`, which excludes exactly that case.
+Different from every prior component: this one **self-marks its own gaps** with three
+inline `// TODO` comments (halo ring, shadow tiers, disabled treatment) instead of leaving
+them silently unimplemented. Worth calling out as the better pattern — every finding below
+is something the file itself doesn't disclose.
 
 Verified with a full clean `:app:assembleDebug --rerun-tasks --no-build-cache` —
-`BUILD SUCCESSFUL in 17s`, 42/42 tasks executed. No warnings beyond the pre-existing SDK
-XML-version notice.
+`BUILD SUCCESSFUL in 21s`, 42/42 tasks executed. No warnings beyond the pre-existing SDK
+XML-version notice. None of the findings below are compile errors.
 
-## Found, not fixed — new this round
+## Found, not fixed — new this round, undisclosed by the file's own TODOs
 
-- **`active` defaults to `true`** — a fifth occurrence of the wrong-default pattern below.
-- **The entire `DISABLED` treatment is unimplemented.** The doc spec: content →
-  `fgDisabled`, background removed entirely, no shadow, no press scale. The code: `enabled`
-  reaches only `.clickable(enabled = enabled)`, which correctly blocks clicks (and, as a
-  side effect, blocks `isPressed` from ever going true, so the press-scale accidentally
-  can't fire either). But content colour, background colour, and the Filled/Raised glow
-  are computed purely from `variant`/`active`/`isPressed` — none of them branch on
-  `enabled` at all. A disabled Filled icon button would still render its full gradient
-  and glow.
-
-This makes **three separate components now with an unimplemented disabled state** —
-`FathomToggle`'s knob background/shadow (last note), `FathomChip`'s presumably similar gap
-(never itself confirmed, only its icon-slot and import issues were), and now
-`FathomIconButton`'s complete absence of one. Worth checking as a set rather than three
-separate fixes, same reasoning as the wrong-default pattern.
+- **`decorationBox` never calls `innerTextField`.** `BasicTextField`'s trailing lambda
+  *is* its `decorationBox` (last parameter, trailing-lambda syntax) and is required to
+  invoke the `innerTextField` composable it receives to actually render the field's text.
+  This lambda only conditionally shows the placeholder and never references
+  `innerTextField` at all. Net effect: an empty field shows the placeholder, but the
+  moment `value` becomes non-empty, **neither the placeholder nor the typed text
+  renders** — the field goes visually blank while still accepting input. This is the
+  most severe finding of any round so far: not a missing polish detail, the field cannot
+  show what's typed into it.
+- **`visualTransformation` ignores `isPassword` entirely.** It's
+  `if (revealed) VisualTransformation.None else PasswordVisualTransformation()` —
+  `revealed` starts `false` and nothing ever sets it (see next finding), so **every**
+  field, password or not, masks its input by default. `isPassword` only gates whether the
+  reveal-eye icon is drawn, never the masking itself.
+- **The reveal-eye icon has no click handler.** Rendered when `isPassword` is true, but
+  no `.clickable`/`onClick` anywhere sets `revealed` — purely decorative, compounding the
+  masking bug above with no way to work around it from the UI.
+- **hint/error text colour keys off the wrong null-check.** `if (hint != null) fgTertiary
+  else warm` — the text itself correctly prefers `error` (`error ?: hint!!`), but the
+  colour check should mirror that (`if (error != null) warm else fgTertiary`) and doesn't.
+  When both `hint` and `error` are supplied together, the error string renders in grey
+  `fgTertiary` instead of coral `warm`. Only correct when exactly one of the two is set.
 
 ## Carried over from before this session
 
-- **Wrong-default pattern, five occurrences now** — `FathomIconButton.active`,
+- **Wrong-default pattern, five occurrences** — `FathomIconButton.active`,
   `FathomToggle.checked`, `FathomChip.selected`, `FathomSectionLabel.accent`, all
   defaulting to the override/special state rather than the plain one.
-- **Disabled-state gap, three occurrences** — see above.
+  (`FathomTextField`'s defaults — `value`/`label`/`placeholder`/`hint` = `"Fathom"`,
+  `strength = 0.53f` — are `@Preview` placeholders, not this same shape of bug; not
+  counted here.)
+- **Disabled-state gap, now four components** — `FathomTextField` joins
+  `FathomToggle`/`FathomChip`/`FathomIconButton`, but is the first to mark it with an
+  explicit TODO rather than leave it silent.
 - **`FathomChip`'s icon slot doesn't match its own spec** — doc says
   `@Composable () -> Unit`, actual signature is `icon: ImageVector? = null`.
 - **Two unused imports in `FathomChip`** — `android.graphics.drawable.Icon` and
@@ -59,14 +70,14 @@ separate fixes, same reasoning as the wrong-default pattern.
 - **`FathomSectionLabel`'s no-rule-with-action branch is still unimplemented.**
 - **`FathomFonts` still points at the wrong font provider** —
   `com.google.play.gms.fonts` / `com.google.play.gms`, should be
-  `com.google.android.gms.fonts` / `com.google.android.gms`. Seven components deep into
+  `com.google.android.gms.fonts` / `com.google.android.gms`. Eight components deep into
   rendering text/colour through this theme now, still never exercised.
 - **`FathomShapes` still orphaned.**
 - **`LocalFathomColors` still uses `compositionLocalOf`**, not `staticCompositionLocalOf`.
 - **`@Preview` still sits directly on the shipping composables**
   (`FathomButton`, `FathomSectionLabel`, `FathomPaginationDots`, `FathomChip`,
-  `FathomToggle`, `FathomIconButton`, `FathomNavHost`).
-- No trailing newline at EOF on the last five new files.
+  `FathomToggle`, `FathomIconButton`, `FathomTextField`, `FathomNavHost`).
+- No trailing newline at EOF on the last six new files.
 
 ## Not verified this round
 
@@ -74,10 +85,11 @@ No device/emulator run, no release variant — unchanged gaps, every round so fa
 
 ## Suggested next step
 
-Two patterns now span five and three components respectively (wrong defaults, missing
-disabled states) — either is a single pass that pays off across most of the design
-system's core components at once, more leveraged than any single-component fix at this
-point. The font provider strings remain the oldest individual item.
+The `decorationBox` bug in `FathomTextField` is the one item across every note so far
+that makes a component look broken rather than merely unfinished — worth fixing before
+anything else, since any screen built against this field right now would appear to eat
+user input silently. After that, the two cross-cutting patterns (five wrong defaults,
+four missing disabled states) remain the highest-leverage single passes.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01TbnXJC297hkg8tpvJFE7RR
