@@ -59,6 +59,9 @@ data class FathomColors(
     val ink: Color,
     val paper: Color,
 
+    val glassTop: Color,
+    val glassBottom: Color,
+
     // ── Elevation tint ───────────────────────────────────────────────────────
     // Base colour for shadows. Teal in light, near-black in dark; apply the
     // per-level alpha at the call site (sm .06 / md .09 / lg .12 in light,
@@ -103,6 +106,8 @@ val FathomLightColors = FathomColors(
     focusRing = Color(0x522FBDB4),      // current @ 32%
     ink = Color(0xFF10201D),
     paper = Color(0xFFFFFFFF),
+    glassTop = Color(0xDBFFFFFF),      // paper @ 86%
+    glassBottom = Color(0xB8FFFFFF),   // paper @ 72%
     shadowTint = Color(0xFF17847F),     // currentDeep
 )
 
@@ -134,6 +139,8 @@ val FathomDarkColors = FathomColors(
     focusRing = Color(0x664FD9CE),      // current @ 40%
     ink = Color(0xFF04100F),
     paper = Color(0xFFE9F5F2),
+    glassTop = Color(0xE0163330),      // bgElev @ 88%
+    glassBottom = Color(0xC70F2422),   // bgRaised @ 78%
     shadowTint = Color(0xFF020908),     // near-black, not teal, in dark
 )
 
