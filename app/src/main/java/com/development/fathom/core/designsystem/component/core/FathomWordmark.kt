@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.development.fathom.core.designsystem.theme.FathomFonts
@@ -17,6 +18,7 @@ enum class FathomWordmarkTone { INK, ACCENT, ON_COLOR, QUIET }
 @Composable
 fun FathomWordmark(
     modifier: Modifier = Modifier,
+    size: TextUnit = 22.sp,
     tone: FathomWordmarkTone = FathomWordmarkTone.INK
 ) {
     val color = when (tone) {
@@ -31,9 +33,9 @@ fun FathomWordmark(
         style = TextStyle(
             fontFamily = FathomFonts.spaceGrotesk,
             fontWeight = FontWeight.W600,
-            fontSize = 22.sp,
-            lineHeight = 22.sp,
-            letterSpacing = (-0.003).em,
+            fontSize = size,
+            lineHeight = size,
+            letterSpacing = (-0.03).em,
             color = color
         ),
         modifier = modifier

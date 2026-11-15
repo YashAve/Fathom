@@ -38,7 +38,12 @@ fun FathomTopAppBar(
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
-    ) {
+    ) {Row(
+                modifier = Modifier,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                actions()
+            }
         if (leading != null) leading()
         else if (onBack != null) FathomIconButton(
             label = "Back",
@@ -63,12 +68,12 @@ fun FathomTopAppBar(
                     style = FathomTypography.labelMedium.copy(color = FathomTheme.colors.fgTertiary)
                 )
             }
-            Row(
-                modifier = Modifier,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                actions()
-            }
+        }
+        Row(
+            modifier = Modifier,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            actions()
         }
     }
 }
