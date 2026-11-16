@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -46,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.development.fathom.core.designsystem.theme.FathomMotion
 import com.development.fathom.core.designsystem.theme.FathomTheme
 import com.development.fathom.core.designsystem.theme.FathomTypography
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 data class FathomSheetItem(
@@ -61,16 +59,14 @@ data class FathomSheetItem(
 @Composable
 private fun FathomSheetItemRow(
     modifier: Modifier = Modifier,
-    item: FathomSheetItem = previewSheetItems[0],
-    onDismiss: () -> Unit = { },
-    sheetState: () -> SheetState,
-    scope: () -> CoroutineScope
+    item: FathomSheetItem,
+    onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed = interactionSource.collectIsPressedAsState().value
     val itemColor = when {
-        isPressed -> FathomTheme.colors.textAccent
         item.warm -> FathomTheme.colors.warm
+        isPressed -> FathomTheme.colors.textAccent
         else -> FathomTheme.colors.fgPrimary
     }
     val pillColor = if (item.warm) FathomTheme.colors.warmWash else FathomTheme.colors.currentWash
@@ -89,11 +85,7 @@ private fun FathomSheetItemRow(
                 role = Role.Button,
                 onClick = {
                     item.onClick()
-                    scope().launch {
-                        sheetState().hide()
-                    }.invokeOnCompletion {
-                        if (!sheetState().isVisible) onDismiss()
-                    }
+                    onClick()
                 }
             )
             .drawBehind {
@@ -107,7 +99,7 @@ private fun FathomSheetItemRow(
             Icon(
                 imageVector = item.icon,
                 tint = itemColor,
-                contentDescription = item.label,
+                contentDescription = null,
                 modifier = Modifier.size(21.dp)
             )
         }
@@ -168,9 +160,14 @@ fun FathomBottomSheet(
             }
             items.forEach { item ->
                 FathomSheetItemRow(
-                    item = item,
-                    onDismiss = onDismiss,
-                    sheetState = { sheetState }) { scope }
+                    item = item
+                ) {
+                    scope.launch {
+                        sheetState.hide()
+                    }.invokeOnCompletion {
+                        if (!sheetState.isVisible) onDismiss()
+                    }
+                }
             }
             content()
         }
