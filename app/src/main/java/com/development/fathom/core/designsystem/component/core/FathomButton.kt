@@ -1,5 +1,6 @@
 package com.development.fathom.core.designsystem.component.core
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -8,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,11 +26,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -63,7 +67,7 @@ enum class FathomButtonSize(
     )
 }
 
-enum class FathomButtonVariant { Primary, Secondary, Tertiary }
+enum class FathomButtonVariant { Primary, Secondary, Tertiary, Warm, Quiet }
 
 /**
  * DESIGN SPEC — FathomButton (components/core/Button.jsx → .fa-btn--primary).
@@ -134,15 +138,41 @@ enum class FathomButtonVariant { Primary, Secondary, Tertiary }
  * layer; a second would need drawBehind and isn't worth it yet.
  *
  * ═══════════════════════════════════════════════════════════════════════════
+ * OTHER VARIANTS
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SECONDARY - flat bgRaised, content fgPrimary. No glow.
+ *
+ * TERTIARY  - no background, content textAccent. No glow. (The design's "text" button.)
+ *
+ * WARM      - destructive confirmations: "Sign out", "Remove". The screen's ONE
+ *             coral element, never two.
+ *           - Gradient 135°, two stops: warmLight (0%) → warm (100%).
+ *           - Content Color.White (the design uses pure white here).
+ *           - Glow like Primary, in warm @ GlowAlpha.warm (0.26f) light,
+ *             GlowAlpha.warmDark (0.32f) dark.
+ *
+ * QUIET     - low-emphasis actions: "Not now", "Skip".
+ *           - Flat bgSunken, content fgSecondary. No glow.
+ *           - Pressed: background currentWash, content textAccent,
+ *             both fading over FathomMotion.base on glide.
+ *           - The background is drawn in drawBehind with the animated colour,
+ *             so the fade re-runs the draw phase only (same as the nav pill).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
  * STATES  (hover is discarded — it does not exist on Android)
  * ═══════════════════════════════════════════════════════════════════════════
  * NORMAL   as above.
  *
  * PRESSED  - scale 0.972 via Modifier.graphicsLayer { scaleX = s; scaleY = s }
  *            animated with tween(FathomMotion.quick, easing = FathomMotion.settle)
+ *          - ORDER MATTERS: graphicsLayer only scales the modifiers that come
+ *            AFTER it. The chain is clickable → graphicsLayer → shadow → clip →
+ *            background, so the whole pill (glow included) shrinks, while the
+ *            touch area (clickable, before the layer) stays full size.
  *          - glow drops to the press shadow:
  *            elevation FathomElevation.press (1.dp),
  *            alpha FathomElevation.Light.press (0.08f) / Dark.press (0.50f)
+ *            (not implemented yet)
  *          - NEVER add a scale transform at the call site. It lives in here.
  *
  * DISABLED - the gradient is REMOVED entirely, replaced by flat
@@ -173,6 +203,7 @@ enum class FathomButtonVariant { Primary, Secondary, Tertiary }
  * @param block     true → fillMaxWidth. Use for auth and onboarding CTAs.
  * @param enabled   false → the disabled treatment above.
  * @param loading   true → spinner replaces the leading icon, clicks ignored.
+ * @param variant   Primary | Secondary | Tertiary | Warm | Quiet. Default Primary.
  * @param icon      leading icon, drawn before the label.
  * @param iconRight trailing icon, drawn after the label.
  */
@@ -205,23 +236,64 @@ fun FathomButton(
     val currentLight = FathomTheme.colors.currentLight
     val current = FathomTheme.colors.current
     val currentDeep = FathomTheme.colors.currentDeep
-    val contentColor = if (enabled) when (variant) {
-        FathomButtonVariant.Primary -> FathomTheme.colors.currentOn
-        FathomButtonVariant.Secondary -> FathomTheme.colors.fgPrimary
-        FathomButtonVariant.Tertiary -> FathomTheme.colors.textAccent
-    } else FathomTheme.colors.fgDisabled
+    val warmLight = FathomTheme.colors.warmLight
+    val warm = FathomTheme.colors.warm
+
+    // Animated, because Quiet changes its content colour on press.
+    // For the other variants the target only changes with `enabled`.
+    val contentColor by animateColorAsState(
+        targetValue = if (!enabled) FathomTheme.colors.fgDisabled else when (variant) {
+            FathomButtonVariant.Primary -> FathomTheme.colors.currentOn
+            FathomButtonVariant.Secondary -> FathomTheme.colors.fgPrimary
+            FathomButtonVariant.Tertiary -> FathomTheme.colors.textAccent
+            FathomButtonVariant.Warm -> Color.White
+            FathomButtonVariant.Quiet ->
+                if (isPressed) FathomTheme.colors.textAccent else FathomTheme.colors.fgSecondary
+        },
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide)
+    )
+
+    // Only Quiet's background changes on press. Read inside drawBehind below,
+    // so the fade re-runs the draw phase only.
+    val quietBackground by animateColorAsState(
+        targetValue = if (isPressed) FathomTheme.colors.currentWash else FathomTheme.colors.bgSunken,
+        animationSpec = tween(FathomMotion.base, easing = FathomMotion.glide)
+    )
+
+    // Primary and Warm float on a coloured glow. The other variants have none (null).
+    val glowColor: Color? = when (variant) {
+        FathomButtonVariant.Primary -> current.copy(alpha = FathomElevation.GlowAlpha.current)
+        FathomButtonVariant.Warm -> warm.copy(
+            alpha = if (FathomTheme.colors.isLight) FathomElevation.GlowAlpha.warm
+            else FathomElevation.GlowAlpha.warmDark
+        )
+        else -> null
+    }
 
     Box(
         modifier
             .then(if (block) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
             .wrapContentHeight()
+            // Touch area first: it stays full size while the button shrinks on press.
+            .clickable(
+                interactionSource = interactionSource,
+                enabled = enabled && !loading,
+                indication = null,
+                onClick = onClick
+            )
+            // graphicsLayer only scales what comes AFTER it in the chain.
+            // Before shadow / clip / background, so the whole pill shrinks, not just the label.
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .then(
-                if (variant == FathomButtonVariant.Primary && enabled)
+                if (glowColor != null && enabled)
                     Modifier.shadow(
                         elevation = 10.dp,
                         shape = RoundedCornerShape(FathomRadius.button),
-                        ambientColor = FathomTheme.colors.current.copy(alpha = FathomElevation.GlowAlpha.current),
-                        spotColor = FathomTheme.colors.current.copy(alpha = FathomElevation.GlowAlpha.current)
+                        ambientColor = glowColor,
+                        spotColor = glowColor
                     ) else Modifier
             )
             .clip(RoundedCornerShape(FathomRadius.button))
@@ -247,20 +319,34 @@ fun FathomButton(
                                 }
                             }
 
+                        FathomButtonVariant.Warm ->
+                            Modifier.drawWithCache {
+                                val gradient = Brush.linearGradient(
+                                    Pair(0f, warmLight),
+                                    Pair(1f, warm),
+                                    start = Offset.Zero,
+                                    end = Offset(this.size.width, this.size.height)
+                                )
+                                onDrawBehind {
+                                    drawRoundRect(
+                                        brush = gradient,
+                                        cornerRadius = CornerRadius(FathomRadius.button.toPx())
+                                    )
+                                }
+                            }
+
                         FathomButtonVariant.Secondary -> Modifier.background(FathomTheme.colors.bgRaised)
                         FathomButtonVariant.Tertiary -> Modifier
+
+                        FathomButtonVariant.Quiet ->
+                            Modifier.drawBehind {
+                                drawRoundRect(
+                                    color = quietBackground,
+                                    cornerRadius = CornerRadius(FathomRadius.button.toPx())
+                                )
+                            }
                     }
                 }
-            )
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                enabled = enabled && !loading,
-                indication = null,
-                onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -295,6 +381,24 @@ fun FathomButton(
                 )
             }
             iconRight()
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun FathomButtonVariantsPreview() {
+    FathomTheme {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FathomButton(text = "Start listening", variant = FathomButtonVariant.Primary)
+            FathomButton(text = "Secondary", variant = FathomButtonVariant.Secondary)
+            FathomButton(text = "Stay", variant = FathomButtonVariant.Tertiary)
+            FathomButton(text = "Sign out", variant = FathomButtonVariant.Warm)
+            FathomButton(text = "Not now", variant = FathomButtonVariant.Quiet)
+            FathomButton(text = "Disabled", enabled = false)
         }
     }
 }
