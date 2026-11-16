@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.development.fathom.core.designsystem.theme.FathomMotion
 import com.development.fathom.core.designsystem.theme.FathomTheme
 import com.development.fathom.core.designsystem.theme.FathomTypography
+import com.development.fathom.core.util.lerp
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.roundToInt
@@ -306,14 +307,6 @@ private fun ScrubberPreview() {
  * sin(a + FULL_LAP) == sin(a), so when phase jumps from FULL_LAP back to 0f the picture doesn't change.
  */
 private val FULL_LAP = 2f * PI.toFloat()
-
-/**
- * The point between start and stop: fraction 0f -> start, 1f -> stop, 0.5f -> exactly halfway.
- * Same formula as the Offset lerp you used before (A + (B - A) * t), just for one Float.
- * Written here because Compose's Float lerp lives in the ui-util library, which this module may not include.
- */
-internal fun lerp(start: Float, stop: Float, fraction: Float): Float =
-    start + (stop - start) * fraction
 
 /**
  * Finger x (pixels) -> progress (0..1).

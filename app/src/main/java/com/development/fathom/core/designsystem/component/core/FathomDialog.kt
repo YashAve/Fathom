@@ -25,16 +25,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import com.development.fathom.core.designsystem.component.fluid.lerp
 import com.development.fathom.core.designsystem.theme.FathomElevation
 import com.development.fathom.core.designsystem.theme.FathomMotion
 import com.development.fathom.core.designsystem.theme.FathomTheme
 import com.development.fathom.core.designsystem.theme.FathomTypography
+import com.development.fathom.core.util.lerp
 
 @Composable
 fun FathomDialog(
