@@ -2,6 +2,7 @@ package com.development.fathom.core.designsystem.component.fluid
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.unit.Dp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -62,3 +63,5 @@ internal fun gradientLine(cx: Float, cy: Float, halfLength: Float, angleDegrees:
     val dy = sin(rad) * halfLength
     return Offset(cx - dx, cy - dy) to Offset(cx + dx, cy + dy)
 }
+
+internal fun blurRadius(sigma: Dp): Dp = sigma * 1.7320508f
